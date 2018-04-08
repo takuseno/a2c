@@ -19,6 +19,7 @@ class Agent(AgentInterface):
                  entropy_factor=0.01,
                  grad_clip=40.0,
                  state_shape=[84, 84, 1],
+                 phi=lambda s: s,
                  name='a2c'):
         self.actions = actions
         self.gamma = gamma
@@ -26,6 +27,7 @@ class Agent(AgentInterface):
         self.time_horizon = time_horizon
         self.state_shape = state_shape
         self.nenvs = nenvs
+        self.phi = phi 
 
         self._act, self._train = build_graph.build_train(
             model=model,
@@ -47,6 +49,7 @@ class Agent(AgentInterface):
         self.last_obs = None
         self.last_action = None
         self.last_value = None
+        self.last_done = None
 
         self.rollouts = [Rollout() for _ in range(nenvs)]
         self.t = 0
@@ -82,7 +85,7 @@ class Agent(AgentInterface):
 
     def act(self, obs, reward, done, training=True):
         # change state shape to WHC
-        obs = list(map(lambda o: np.transpose(o, [1, 2, 0]), obs))
+        obs = list(map(self.phi, obs))
         # take next action
         prob, value, rnn_state = self._act(
             obs, self.rnn_state0, self.rnn_state1)
@@ -102,7 +105,7 @@ class Agent(AgentInterface):
                         state=self.last_obs[i],
                         reward=reward[i],
                         action=self.last_action[i],
-                        value=self.last_value[i],
+                        value=0.0 if self.last_done[i] else self.last_value[i],
                         terminal=1.0 if done[i] else 0.0,
                         feature=[self.rnn_state0[i], self.rnn_state1[i]]
                     )
@@ -112,6 +115,7 @@ class Agent(AgentInterface):
         self.last_obs = obs
         self.last_action = action
         self.last_value = value
+        self.last_done = done
         return list(map(lambda a: self.actions[a], action))
 
     def stop_episode(self, obs, reward, training=True):
@@ -121,7 +125,7 @@ class Agent(AgentInterface):
                     state=self.last_obs[i],
                     action=self.last_action[i],
                     reward=reward[i],
-                    value=self.last_value[i],
+                    value=0.0,
                     terminal=1.0
                 )
             self.train([0.0 for _ in range(self.nenvs)])
@@ -132,6 +136,7 @@ class Agent(AgentInterface):
         self.last_obs = None
         self.last_action = None
         self.last_value = None
+        self.last_done = None
 
     def _rollout_trajectories(self):
         states = []

@@ -10,6 +10,7 @@ def normalized_columns_initializer(std=1.0):
     return _initializer
 
 def _make_network(convs,
+                  fcs,
                   lstm,
                   inpt,
                   rnn_state_tuple,
@@ -31,14 +32,17 @@ def _make_network(convs,
                     padding='VALID',
                     activation_fn=tf.nn.relu
                 )
+            out = layers.flatten(out)
 
-        conv_out = layers.fully_connected(
-            layers.flatten(out), lstm_unit, activation_fn=tf.nn.relu)
+        with tf.variable_scope('hiddens'):
+            for hidden in fcs:
+                out = layers.fully_connected(
+                    out, hidden, activation_fn=tf.nn.relu)
 
         with tf.variable_scope('rnn'):
             lstm_cell = tf.contrib.rnn.BasicLSTMCell(lstm_unit, state_is_tuple=True)
             # sequence to batch
-            rnn_in = tf.reshape(conv_out, [nenvs, step_size, lstm_unit])
+            rnn_in = tf.reshape(out, [nenvs, step_size, lstm_unit])
             sequence_length = tf.ones(nenvs, dtype=tf.int32) * step_size
             lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
                 lstm_cell, rnn_in, initial_state=rnn_state_tuple,
@@ -48,8 +52,6 @@ def _make_network(convs,
 
         if lstm:
             out = rnn_out
-        else:
-            out = conv_out
 
         policy = layers.fully_connected(
             out, num_actions, activation_fn=tf.nn.softmax,
@@ -62,5 +64,5 @@ def _make_network(convs,
 
     return policy, value, (lstm_state[0], lstm_state[1])
 
-def make_network(convs, lstm=True):
-    return lambda *args, **kwargs: _make_network(convs, lstm, *args, **kwargs)
+def make_network(convs, fcs, lstm=True):
+    return lambda *args, **kwargs: _make_network(convs, fcs, lstm, *args, **kwargs)
