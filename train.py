@@ -94,7 +94,11 @@ def main():
         saver.restore(sess, args.load)
 
     # create environemtns
-    envs = [EnvWrapper(gym.make(args.env)) for _ in range(constants.ACTORS)]
+    envs = []
+    for i in range(constants.ACTORS):
+        env = gym.make(args.env)
+        env.seed(i)
+        envs.append(EnvWrapper(env))
     batch_env = BatchEnvWrapper(
         envs,
         r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
