@@ -1,4 +1,4 @@
-# A3C
+# A2C
 A2C imeplementation with TensorFlow.
 
 ## requirements
