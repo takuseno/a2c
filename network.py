@@ -15,6 +15,8 @@ def _make_network(convs,
                   rnn_state_tuple,
                   num_actions,
                   lstm_unit,
+                  nenvs,
+                  step_size,
                   scope,
                   reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
@@ -35,11 +37,13 @@ def _make_network(convs,
 
         with tf.variable_scope('rnn'):
             lstm_cell = tf.contrib.rnn.BasicLSTMCell(lstm_unit, state_is_tuple=True)
-            rnn_in = tf.reshape(conv_out, [1, -1, lstm_unit])
-            step_size = tf.shape(inpt)[:1]
+            # sequence to batch
+            rnn_in = tf.reshape(conv_out, [nenvs, step_size, lstm_unit])
+            sequence_length = tf.ones(nenvs, dtype=tf.int32) * step_size
             lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
                 lstm_cell, rnn_in, initial_state=rnn_state_tuple,
-                sequence_length=step_size, time_major=False)
+                sequence_length=sequence_length, time_major=False)
+            # batch to sequence
             rnn_out = tf.reshape(lstm_outputs, [-1, lstm_unit])
 
         if lstm:
@@ -56,7 +60,7 @@ def _make_network(convs,
             out, 1, activation_fn=None, biases_initializer=None,
             weights_initializer=normalized_columns_initializer())
 
-    return policy, value, (lstm_state[0][:1, :], lstm_state[1][:1, :])
+    return policy, value, (lstm_state[0], lstm_state[1])
 
 def make_network(convs, lstm=True):
     return lambda *args, **kwargs: _make_network(convs, lstm, *args, **kwargs)

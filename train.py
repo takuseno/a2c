@@ -12,28 +12,13 @@ import tensorflow as tf
 
 from lightsaber.tensorflow.util import initialize
 from lightsaber.tensorflow.log import TfBoardLogger, dump_constants
-from lightsaber.rl.trainer import AsyncTrainer
-from lightsaber.rl.env_wrapper import EnvWrapper
+from lightsaber.rl.trainer import BatchTrainer
+from lightsaber.rl.env_wrapper import EnvWrapper, BatchEnvWrapper
 from actions import get_action_space
 from network import make_network
 from agent import Agent
 from datetime import datetime
 
-def make_agent(model, actions, optimizer, name):
-    return Agent(
-        model,
-        actions,
-        optimizer,
-        gamma=constants.GAMMA,
-        lstm_unit=constants.LSTM_UNIT,
-        time_horizon=constants.TIME_HORIZON,
-        policy_factor=constants.POLICY_FACTOR,
-        value_factor=constants.VALUE_FACTOR,
-        entropy_factor=constants.ENTROPY_FACTOR,
-        grad_clip=constants.GRAD_CLIP,
-        state_shape=constants.IMAGE_SHAPE + [constants.STATE_WINDOW],
-        name=name
-    )
 
 def main():
     date = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -67,10 +52,22 @@ def main():
 
     env_name = args.env
     actions = get_action_space(env_name)
-    master = make_agent(model, actions, optimizer, 'global')
+    agent = Agent(
+        model,
+        actions,
+        optimizer,
+        nenvs=constants.ACTORS,
+        gamma=constants.GAMMA,
+        lstm_unit=constants.LSTM_UNIT,
+        time_horizon=constants.TIME_HORIZON,
+        policy_factor=constants.POLICY_FACTOR,
+        value_factor=constants.VALUE_FACTOR,
+        entropy_factor=constants.ENTROPY_FACTOR,
+        grad_clip=constants.GRAD_CLIP,
+        state_shape=constants.IMAGE_SHAPE + [constants.STATE_WINDOW]
+    )
 
-    global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'global')
-    saver = tf.train.Saver(global_vars)
+    saver = tf.train.Saver()
     if args.load:
         saver.restore(sess, args.load)
 
@@ -80,44 +77,39 @@ def main():
         state = np.array(state, dtype=np.float32)
         return state / 255.0
 
-    agents = []
-    envs = []
-    for i in range(args.threads):
-        agent = make_agent(model, actions, optimizer, 'worker{}'.format(i))
-        agents.append(agent)
-        env = EnvWrapper(
-            gym.make(args.env),
-            r_preprocess=lambda r: np.clip(r, -1, 1),
-            s_preprocess=s_preprocess
-        )
-        envs.append(env)
+    # create environemtns
+    envs = [EnvWrapper(gym.make(args.env)) for _ in range(constants.ACTORS)]
+    batch_env = BatchEnvWrapper(
+        envs,
+        r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
+        s_preprocess=s_preprocess
+    )
 
     initialize()
 
     summary_writer = tf.summary.FileWriter(logdir, sess.graph)
     logger = TfBoardLogger(summary_writer)
     logger.register('reward', dtype=tf.float32)
-    end_episode = lambda r, gs, s, ge, e: logger.plot('reward', r, gs)
+    end_episode = lambda r, s, e: logger.plot('reward', r, s)
 
-    def after_action(state, reward, shared_step, global_step, local_step):
+    def after_action(state, reward, global_step, local_step):
         if constants.LR_DECAY == 'linear':
-            decay = 1.0 - (float(shared_step) / constants.FINAL_STEP)
+            decay = 1.0 - (float(global_step) / constants.FINAL_STEP)
             sess.run(decay_lr_op, feed_dict={decayed_lr: constants.LR * decay})
-        if shared_step % 10 ** 6 == 0:
+        if global_step % 10 ** 6 == 0:
             path = os.path.join(outdir, 'model.ckpt')
-            saver.save(sess, path, global_step=shared_step)
+            saver.save(sess, path, global_step=global_step)
 
-    trainer = AsyncTrainer(
-        envs=envs,
-        agents=agents,
+    trainer = BatchTrainer(
+        env=batch_env,
+        agent=agent,
         render=args.render,
         state_shape=constants.IMAGE_SHAPE,
         state_window=constants.STATE_WINDOW,
         final_step=constants.FINAL_STEP,
         after_action=after_action,
         end_episode=end_episode,
-        training=not args.demo,
-        n_threads=args.threads
+        training=not args.demo
     )
     trainer.start()
 

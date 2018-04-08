@@ -3,6 +3,7 @@ STATE_WINDOW = 1
 CONVS = [[16, 8, 4, 0], [32, 4, 2, 0]]
 LSTM_UNIT = 256
 FINAL_STEP = 10 ** 8
+ACTORS = 8
 
 LSTM = True
 POLICY_FACTOR = 1.0
