@@ -153,12 +153,4 @@ class Agent(AgentInterface):
             terminals = [terminals[0]] + terminals[:len(terminals) - 1]
             mask = (np.array(terminals) - 1.0) * -1.0
             masks.append(mask.tolist())
-        # list to ndarray
-        states = np.array(states, dtype=np.float32)
-        actions = np.array(actions, dtype=np.uint8)
-        rewards = np.array(rewards, dtype=np.float32)
-        values = np.array(values, dtype=np.float32)
-        features0 = np.array(features0, dtype=np.float32)
-        features1 = np.array(features1, dtype=np.float32)
-        masks = np.array(masks, dtype=np.float32)
         return states, actions, rewards, values, features0, features1, masks
