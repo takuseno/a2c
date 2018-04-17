@@ -71,7 +71,7 @@ def main():
     lr = tf.Variable(constants.LR)
     decayed_lr = tf.placeholder(tf.float32)
     decay_lr_op = lr.assign(decayed_lr)
-    optimizer = tf.train.RMSPropOptimizer(lr, decay=0.99, epsilon=1e-5)
+    optimizer = tf.train.RMSPropOptimizer(lr, decay=0.99, epsilon=0.1)
 
     agent = Agent(
         model,

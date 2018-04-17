@@ -42,12 +42,15 @@ def build_train(model,
         log_prob = tf.reduce_sum(log_policy * actions_one_hot, [1])
 
         # loss
+        advantages = tf.reshape(advantages_ph, [-1, 1])
+        target_values = tf.reshape(target_values_ph, [-1, 1])
+        masks = tf.reshape(mask_ph, [-1, 1])
         value_loss = tf.reduce_sum(
-            tf.square(target_values_ph - tf.reshape(value, [-1])) * mask_ph)
+            tf.square(target_values - value) * masks, name='value_loss')
         entropy = -tf.reduce_sum(
-            tf.reduce_sum(policy * log_policy, axis=1) * mask_ph)
-        advantages  = tf.reshape(advantages_ph, [-1, 1])
-        policy_loss = -tf.reduce_sum(log_prob * advantages * mask_ph)
+            tf.reduce_sum(policy * log_policy, axis=1) * masks, name='entropy')
+        policy_loss = -tf.reduce_sum(
+            log_prob * advantages * masks, name='policy_loss')
         loss = value_factor * value_loss\
             + policy_factor * policy_loss\
             - entropy_factor * entropy
