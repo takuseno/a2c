@@ -1,4 +1,4 @@
-STATE_SHAPE = [84, 84]
+STATE_SHAPE = [42, 42]
 STATE_WINDOW = 1
 CONVS = [[32, 3, 2], [32, 3, 2], [32, 3, 2], [32, 3, 2]]
 FCS = []
@@ -14,5 +14,5 @@ ENTROPY_FACTOR = 0.01
 LR = 1e-4
 LR_DECAY = 'constant'
 GRAD_CLIP = 40.0
-TIME_HORIZON = 5
+TIME_HORIZON = 20
 GAMMA = 0.99
