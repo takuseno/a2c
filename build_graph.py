@@ -1,6 +1,5 @@
 import numpy as np
 import tensorflow as tf
-import lightsaber.tensorflow.util as util
 
 
 def build_train(model,
@@ -45,14 +44,15 @@ def build_train(model,
         advantages = tf.reshape(advantages_ph, [-1, 1])
         target_values = tf.reshape(target_values_ph, [-1, 1])
         masks = tf.reshape(mask_ph, [-1, 1])
-        value_loss = tf.reduce_sum(
-            tf.square(target_values - value) * masks, name='value_loss')
-        entropy = -tf.reduce_sum(
-            tf.reduce_sum(policy * log_policy, axis=1) * masks, name='entropy')
-        policy_loss = -tf.reduce_sum(
-            log_prob * advantages * masks, name='policy_loss')
+        with tf.variable_scope('value_loss'):
+            value_loss = tf.reduce_sum(tf.square(target_values - value) * masks)
+        with tf.variable_scope('entropy'):
+            entropy = -tf.reduce_sum(
+                tf.reduce_sum(policy * log_policy, axis=1) * masks)
+        with tf.variable_scope('policy_loss'):
+            policy_loss = tf.reduce_sum(log_prob * advantages * masks)
         loss = value_factor * value_loss\
-            + policy_factor * policy_loss\
+            - policy_factor * policy_loss\
             - entropy_factor * entropy
 
         # network weights
@@ -65,19 +65,28 @@ def build_train(model,
 
         optimize_expr = optimizer.apply_gradients(zip(gradients, network_vars))
 
-        train = util.function(
-            inputs=[
-                obs_input, rnn_state_ph0, rnn_state_ph1, actions_ph,
-                target_values_ph, advantages_ph, mask_ph, step_size_ph
-            ],
-            outputs=[loss],
-            updates=[optimize_expr]
-        )
+        def train(obs, actions, targets, advantages, rnn_state0, rnn_state1, masks, step_size):
+            feed_dict = {
+                obs_input: obs,
+                actions_ph: actions,
+                target_values_ph: targets,
+                advantages_ph: advantages,
+                rnn_state_ph0: rnn_state0,
+                rnn_state_ph1: rnn_state1,
+                mask_ph: masks,
+                step_size_ph: step_size
+            }
+            loss_val, _ = tf.get_default_session().run([loss, optimize_expr], feed_dict=feed_dict)
+            return loss_val
 
-        act = util.function(
-            inputs=[obs_input, rnn_state_ph0, rnn_state_ph1],
-            outputs=[policy, value, state_out],
-            givens={step_size_ph: 1}
-        )
+        def act(obs, rnn_state0, rnn_state1):
+            feed_dict = {
+                obs_input: obs,
+                rnn_state_ph0: rnn_state0,
+                rnn_state_ph1: rnn_state1,
+                step_size_ph: 1
+            }
+            return tf.get_default_session().run(
+                [policy, value, state_out], feed_dict=feed_dict)
 
     return act, train

@@ -12,6 +12,7 @@ def normalized_columns_initializer(std=1.0):
 def _make_network(convs,
                   fcs,
                   lstm,
+                  padding,
                   inpt,
                   rnn_state_tuple,
                   num_actions,
@@ -23,13 +24,13 @@ def _make_network(convs,
     with tf.variable_scope(scope, reuse=reuse):
         out = inpt
         with tf.variable_scope('convnet'):
-            for num_outputs, kernel_size, stride, padding in convs:
+            for num_outputs, kernel_size, stride in convs:
                 out = layers.convolution2d(
                     out,
                     num_outputs=num_outputs,
                     kernel_size=kernel_size,
                     stride=stride,
-                    padding='VALID',
+                    padding=padding,
                     activation_fn=tf.nn.relu
                 )
             out = layers.flatten(out)
@@ -42,7 +43,7 @@ def _make_network(convs,
         with tf.variable_scope('rnn'):
             lstm_cell = tf.contrib.rnn.BasicLSTMCell(lstm_unit, state_is_tuple=True)
             # sequence to batch
-            rnn_in = tf.reshape(out, [nenvs, step_size, lstm_unit])
+            rnn_in = tf.reshape(out, [nenvs, step_size, out.shape[1]])
             sequence_length = tf.ones(nenvs, dtype=tf.int32) * step_size
             lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
                 lstm_cell, rnn_in, initial_state=rnn_state_tuple,
@@ -64,5 +65,5 @@ def _make_network(convs,
 
     return policy, value, (lstm_state[0], lstm_state[1])
 
-def make_network(convs, fcs, lstm=True):
-    return lambda *args, **kwargs: _make_network(convs, fcs, lstm, *args, **kwargs)
+def make_network(convs, fcs, lstm=True, padding='VALID'):
+    return lambda *args, **kwargs: _make_network(convs, fcs, lstm, padding, *args, **kwargs)

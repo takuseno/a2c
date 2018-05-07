@@ -8,7 +8,17 @@ A2C imeplementation with TensorFlow.
 - tensorflow
 - opencv-python
 - numpy
-- git+https://github.com/imai-laboratory/lightsaber
+- git+https://github.com/imai-laboratory/rlsaber
+
+## train
+```
+$ python train.py [--render] [--env environment id]
+```
+
+## play
+```
+$ python train.py --demo [--render] [--load {path to model}] [--env environment id]
+```
 
 ## implementations
 This repostory is inspired by following projects.

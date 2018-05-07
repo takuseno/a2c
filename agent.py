@@ -1,11 +1,10 @@
-from lightsaber.rl.util import Rollout, compute_v_and_adv
-from lightsaber.rl.trainer import AgentInterface
+from rlsaber.util import Rollout, compute_v_and_adv
 import build_graph
 import numpy as np
 import tensorflow as tf
 
 
-class Agent(AgentInterface):
+class Agent:
     def __init__(self,
                  model,
                  actions,
@@ -79,8 +78,8 @@ class Agent(AgentInterface):
         masks = np.reshape(masks, [-1])
         # train network
         loss = self._train(
-            states, features0, features1,
-            actions, targets, advs, masks, step_size)
+            states, actions, targets, advs,
+            features0, features1, masks, step_size)
         return loss
 
     def act(self, obs, reward, done, training=True):

@@ -11,10 +11,9 @@ import box_constants
 import numpy as np
 import tensorflow as tf
 
-from lightsaber.tensorflow.util import initialize
-from lightsaber.tensorflow.log import TfBoardLogger, dump_constants
-from lightsaber.rl.trainer import BatchTrainer
-from lightsaber.rl.env_wrapper import EnvWrapper, BatchEnvWrapper
+from rlsaber.log import TfBoardLogger, dump_constants
+from rlsaber.trainer import BatchTrainer
+from rlsaber.env import EnvWrapper, BatchEnvWrapper
 from actions import get_action_space
 from network import make_network
 from agent import Agent
@@ -25,7 +24,6 @@ def main():
     date = datetime.now().strftime('%Y%m%d%H%M%S')
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='PongDeterministic-v4')
-    parser.add_argument('--threads', type=int, default=8)
     parser.add_argument('--load', type=str)
     parser.add_argument('--logdir', type=str, default=date)
     parser.add_argument('--render', action='store_true')
@@ -65,9 +63,10 @@ def main():
     sess = tf.Session()
     sess.__enter__()
 
-    model = make_network(constants.CONVS, constants.FCS, lstm=constants.LSTM)
+    model = make_network(
+        constants.CONVS, constants.FCS,
+        lstm=constants.LSTM, padding=constants.PADDING)
 
-    # share Adam optimizer with all threads!
     lr = tf.Variable(constants.LR)
     decayed_lr = tf.placeholder(tf.float32)
     decay_lr_op = lr.assign(decayed_lr)
@@ -105,7 +104,7 @@ def main():
         s_preprocess=state_preprocess
     )
 
-    initialize()
+    sess.run(tf.global_variables_initializer())
 
     summary_writer = tf.summary.FileWriter(logdir, sess.graph)
     logger = TfBoardLogger(summary_writer)
