@@ -1,5 +1,5 @@
 from rlsaber.util import Rollout, compute_v_and_adv
-import build_graph
+from build_graph import build_train
 import numpy as np
 import tensorflow as tf
 
@@ -28,7 +28,7 @@ class Agent:
         self.nenvs = nenvs
         self.phi = phi 
 
-        self._act, self._train = build_graph.build_train(
+        self._act, self._train = build_train(
             model=model,
             num_actions=len(actions),
             optimizer=optimizer,
@@ -93,11 +93,6 @@ class Agent:
         value = np.reshape(value, [-1])
 
         if training:
-            if len(self.rollouts[0].states) == self.time_horizon:
-                self.train(self.last_value)
-                for rollout in self.rollouts:
-                    rollout.flush()
-
             if self.last_obs is not None:
                 for i in range(self.nenvs):
                     self.rollouts[i].add(
@@ -109,6 +104,20 @@ class Agent:
                         feature=[self.rnn_state0[i], self.rnn_state1[i]]
                     )
 
+            if len(self.rollouts[0].states) == self.time_horizon:
+                self.last_value[done] = 0.0
+                self.train(self.last_value)
+                for rollout in self.rollouts:
+                    rollout.flush()
+                for i in range(self.nenvs):
+                    if done[i]:
+                        self.rnn_state0[i] = self.initial_state[0]
+                        self.rnn_state1[i] = self.initial_state[0]
+                        self.last_obs[i] = None
+                        self.last_action[i] = None
+                        self.last_value[i] = None
+                        self.last_done[i] = None
+
         self.t += 1
         self.rnn_state0, self.rnn_state1 = rnn_state
         self.last_obs = obs
@@ -116,26 +125,6 @@ class Agent:
         self.last_value = value
         self.last_done = done
         return list(map(lambda a: self.actions[a], action))
-
-    def stop_episode(self, obs, reward, training=True):
-        if training:
-            for i in range(self.nenvs):
-                self.rollouts[i].add(
-                    state=self.last_obs[i],
-                    action=self.last_action[i],
-                    reward=reward[i],
-                    value=0.0,
-                    terminal=1.0
-                )
-            self.train([0.0 for _ in range(self.nenvs)])
-            for rollout in self.rollouts:
-                rollout.flush()
-        self.rnn_state0 = self.initial_state
-        self.rnn_state1 = self.initial_state
-        self.last_obs = None
-        self.last_action = None
-        self.last_value = None
-        self.last_done = None
 
     def _rollout_trajectories(self):
         states = []

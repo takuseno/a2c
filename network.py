@@ -43,7 +43,7 @@ def _make_network(convs,
         with tf.variable_scope('rnn'):
             lstm_cell = tf.contrib.rnn.BasicLSTMCell(lstm_unit, state_is_tuple=True)
             # sequence to batch
-            rnn_in = tf.reshape(out, [nenvs, step_size, out.shape[1]])
+            rnn_in = tf.reshape(out, [nenvs, step_size, int(out.shape[1])])
             sequence_length = tf.ones(nenvs, dtype=tf.int32) * step_size
             lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
                 lstm_cell, rnn_in, initial_state=rnn_state_tuple,
