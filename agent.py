@@ -45,15 +45,19 @@ class Agent:
         self.initial_state = np.zeros((nenvs, lstm_unit), np.float32)
         self.rnn_state0 = self.initial_state
         self.rnn_state1 = self.initial_state
-        self.last_obs = None
-        self.last_action = None
-        self.last_value = None
-        self.last_done = None
+        self.last_obs = np.zeros(([nenvs] + state_shape), dtype=np.float32)
+        self.last_action = [0 for _ in range(nenvs)]
+        self.last_value = [0.0 for _ in range(nenvs)]
+        self.last_done = [False for _ in range(nenvs)]
 
         self.rollouts = [Rollout() for _ in range(nenvs)]
         self.t = 0
 
-    def train(self, bootstrap_values):
+    def train(self):
+        # get bootstrap values
+        bootstrap_values = self._get_bootstrap_values()
+
+        # rollout trajectories
         states,\
         actions,\
         rewards,\
@@ -61,25 +65,34 @@ class Agent:
         features0,\
         features1,\
         masks = self._rollout_trajectories()
+
+        # compute advantages
         targets = []
         advs = []
-        # compute advantages
         for i in range(self.nenvs):
             v, adv = compute_v_and_adv(
                 rewards[i], values[i], bootstrap_values[i], self.gamma)
             targets.append(v)
             advs.append(adv)
+
+        # step size which is usually time horizon
         step_size = len(self.rollouts[0].states)
+
         # flatten inputs
         states = np.reshape(states, [-1] + self.state_shape)
         actions = np.reshape(actions, [-1])
         targets = np.reshape(targets, [-1])
         advs = np.reshape(advs, [-1])
         masks = np.reshape(masks, [-1])
+
         # train network
         loss = self._train(
             states, actions, targets, advs,
             features0, features1, masks, step_size)
+
+        # clean trajectories
+        for rollout in self.rollouts:
+            rollout.flush()
         return loss
 
     def act(self, obs, reward, done, training=True):
@@ -103,20 +116,6 @@ class Agent:
                         terminal=1.0 if done[i] else 0.0,
                         feature=[self.rnn_state0[i], self.rnn_state1[i]]
                     )
-
-            if len(self.rollouts[0].states) == self.time_horizon:
-                self.last_value[done] = 0.0
-                self.train(self.last_value)
-                for rollout in self.rollouts:
-                    rollout.flush()
-                for i in range(self.nenvs):
-                    if done[i]:
-                        self.rnn_state0[i] = self.initial_state[0]
-                        self.rnn_state1[i] = self.initial_state[0]
-                        self.last_obs[i] = None
-                        self.last_action[i] = None
-                        self.last_value[i] = None
-                        self.last_done[i] = None
 
         self.t += 1
         self.rnn_state0, self.rnn_state1 = rnn_state
@@ -147,3 +146,17 @@ class Agent:
             mask = (np.array(terminals) - 1.0) * -1.0
             masks.append(mask.tolist())
         return states, actions, rewards, values, features0, features1, masks
+
+    def _get_bootstrap_values(self):
+        values = []
+        for done, value in zip(self.last_done, self.last_value):
+            values.append(0.0 if done else value)
+        return values
+
+    def reset(self, index, obs):
+        self.rnn_state0[index] = self.initial_state[0]
+        self.rnn_state1[index] = self.initial_state[0]
+        self.last_obs[index] = self.phi(obs)
+        self.last_action[index] = 0
+        self.last_value[index] = 0
+        self.last_done[index] = False
