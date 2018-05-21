@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from rlsaber.log import TfBoardLogger, dump_constants
 from rlsaber.trainer import BatchTrainer
-from rlsaber.env import EnvWrapper, BatchEnvWrapper
+from rlsaber.env import ActionRepeatEnvWrapper, BatchEnvWrapper
 from actions import get_action_space
 from network import make_network
 from agent import Agent
@@ -44,7 +44,7 @@ def main():
         state_shape = [observation_space.shape[0], constants.STATE_WINDOW]
         state_preprocess = lambda s: s
         # (window_size, dim) -> (dim, window_size)
-        phi = lambda s: np.transpose(s, [1, 0])
+        phi = lambda s: np.transpose(s[0], [1, 0])
     else:
         constants = atari_constants
         actions = get_action_space(env_name)
@@ -55,7 +55,7 @@ def main():
             state = np.array(state, dtype=np.float32)
             return state / 255.0
         # (window_size, H, W) -> (H, W, window_size)
-        phi = lambda s: np.transpose(s, [1, 2, 0])
+        phi = lambda s: np.transpose(s[0], [1, 2, 0])
 
     # save settings
     dump_constants(constants, os.path.join(outdir, 'constants.json'))
@@ -97,12 +97,14 @@ def main():
     for i in range(constants.ACTORS):
         env = gym.make(args.env)
         env.seed(i)
-        envs.append(EnvWrapper(env))
-    batch_env = BatchEnvWrapper(
-        envs,
-        r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
-        s_preprocess=state_preprocess
-    )
+        wrapped_env = ActionRepeatEnvWrapper(
+            env,
+            r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
+            s_preprocess=state_preprocess,
+            repeat=constants.STATE_WINDOW
+        ) 
+        envs.append(wrapped_env)
+    batch_env = BatchEnvWrapper(envs)
 
     sess.run(tf.global_variables_initializer())
 
@@ -126,7 +128,7 @@ def main():
         agent=agent,
         render=args.render,
         state_shape=state_shape[:-1],
-        state_window=constants.STATE_WINDOW,
+        state_window=1,
         time_horizon=constants.TIME_HORIZON,
         final_step=constants.FINAL_STEP,
         after_action=after_action,
