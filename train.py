@@ -11,10 +11,10 @@ import box_constants
 import numpy as np
 import tensorflow as tf
 
+from baselines.common.atari_wrappers import NoopResetEnv, EpisodicLifeEnv
 from rlsaber.log import TfBoardLogger, dump_constants
 from rlsaber.trainer import BatchTrainer
 from rlsaber.env import ActionRepeatEnvWrapper, BatchEnvWrapper
-from actions import get_action_space
 from network import make_network
 from agent import Agent
 from datetime import datetime
@@ -47,7 +47,7 @@ def main():
         phi = lambda s: np.transpose(s[0], [1, 0])
     else:
         constants = atari_constants
-        actions = get_action_space(env_name)
+        actions = range(tmp_env.action_space.n)
         state_shape = constants.STATE_SHAPE + [constants.STATE_WINDOW]
         def state_preprocess(state):
             state = cv2.cvtColor(state, cv2.COLOR_RGB2GRAY)
@@ -97,6 +97,8 @@ def main():
     for i in range(constants.ACTORS):
         env = gym.make(args.env)
         env.seed(i)
+        env = NoopResetEnv(env)
+        env = EpisodicLifeEnv(env)
         wrapped_env = ActionRepeatEnvWrapper(
             env,
             r_preprocess=lambda r: np.clip(r, -1.0, 1.0),

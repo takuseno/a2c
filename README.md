@@ -9,6 +9,7 @@ A2C imeplementation with TensorFlow.
 - opencv-python
 - numpy
 - git+https://github.com/imai-laboratory/rlsaber
+- git+https://github.com/openai/baselines
 
 ## train
 ```
