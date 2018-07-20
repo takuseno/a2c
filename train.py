@@ -36,7 +36,8 @@ def main():
 
     env_name = args.env
     tmp_env = gym.make(env_name)
-    if len(tmp_env.observation_space.shape) == 1:
+    is_atari = len(tmp_env.observation_space.shape) != 1
+    if not is_atari:
         observation_space = tmp_env.observation_space
         constants = box_constants
         actions = range(tmp_env.action_space.n)
@@ -96,8 +97,9 @@ def main():
     for i in range(constants.ACTORS):
         env = gym.make(args.env)
         env.seed(i)
-        env = NoopResetEnv(env)
-        env = EpisodicLifeEnv(env)
+        if is_atari:
+            env = NoopResetEnv(env)
+            env = EpisodicLifeEnv(env)
         wrapped_env = ActionRepeatEnvWrapper(
             env,
             r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
