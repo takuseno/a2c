@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from rlsaber.log import TfBoardLogger, dump_constants
 from rlsaber.trainer import BatchTrainer
-from rlsaber.env import ActionRepeatEnvWrapper, BatchEnvWrapper, NoopResetEnv, EpisodicLifeEnv
+from rlsaber.env import EnvWrapper, BatchEnvWrapper, NoopResetEnv, EpisodicLifeEnv, MaxAndSkipEnv
 from network import make_network
 from agent import Agent
 from datetime import datetime
@@ -44,7 +44,7 @@ def main():
         state_shape = [observation_space.shape[0], constants.STATE_WINDOW]
         state_preprocess = lambda s: s
         # (window_size, dim) -> (dim, window_size)
-        phi = lambda s: np.transpose(s[0], [1, 0])
+        phi = lambda s: np.transpose(s, [1, 0])
     else:
         constants = atari_constants
         actions = range(tmp_env.action_space.n)
@@ -55,7 +55,7 @@ def main():
             state = np.array(state, dtype=np.float32)
             return state / 255.0
         # (window_size, H, W) -> (H, W, window_size)
-        phi = lambda s: np.transpose(s[0], [1, 2, 0])
+        phi = lambda s: np.transpose(s, [1, 2, 0])
 
     # save settings
     dump_constants(constants, os.path.join(outdir, 'constants.json'))
@@ -100,11 +100,11 @@ def main():
         if is_atari:
             env = NoopResetEnv(env, noop_max=7)
             env = EpisodicLifeEnv(env)
-        wrapped_env = ActionRepeatEnvWrapper(
+            env = MaxAndSkipEnv(env)
+        wrapped_env = EnvWrapper(
             env,
             r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
-            s_preprocess=state_preprocess,
-            repeat=constants.STATE_WINDOW
+            s_preprocess=state_preprocess
         ) 
         envs.append(wrapped_env)
     batch_env = BatchEnvWrapper(envs)
@@ -131,7 +131,7 @@ def main():
         agent=agent,
         render=args.render,
         state_shape=state_shape[:-1],
-        state_window=1,
+        state_window=constants.STATE_WINDOW,
         time_horizon=constants.TIME_HORIZON,
         final_step=constants.FINAL_STEP,
         after_action=after_action,
