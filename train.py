@@ -98,9 +98,9 @@ def main():
         env = gym.make(args.env)
         env.seed(i)
         if is_atari:
-            env = NoopResetEnv(env, noop_max=7)
-            env = EpisodicLifeEnv(env)
+            env = NoopResetEnv(env, noop_max=30)
             env = MaxAndSkipEnv(env)
+            env = EpisodicLifeEnv(env)
         wrapped_env = EnvWrapper(
             env,
             r_preprocess=lambda r: np.clip(r, -1.0, 1.0),
