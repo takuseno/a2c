@@ -14,6 +14,7 @@ import tensorflow as tf
 from rlsaber.log import TfBoardLogger, dump_constants
 from rlsaber.trainer import BatchTrainer
 from rlsaber.env import EnvWrapper, BatchEnvWrapper, NoopResetEnv, EpisodicLifeEnv, MaxAndSkipEnv
+from rlsaber.preprocess import atari_preprocess
 from network import make_network
 from agent import Agent
 from datetime import datetime
@@ -50,8 +51,7 @@ def main():
         actions = range(tmp_env.action_space.n)
         state_shape = constants.STATE_SHAPE + [constants.STATE_WINDOW]
         def state_preprocess(state):
-            state = cv2.cvtColor(state, cv2.COLOR_RGB2GRAY)
-            state = cv2.resize(state, tuple(constants.STATE_SHAPE))
+            state = atari_preprocess(state, constants.STATE_SHAPE)
             state = np.array(state, dtype=np.float32)
             return state / 255.0
         # (window_size, H, W) -> (H, W, window_size)
