@@ -3,7 +3,7 @@ CONVS = []
 FCS = [64, 64]
 PADDING = 'VALID'
 LSTM_UNIT = 64
-FINAL_STEP = 10 ** 6
+FINAL_STEP = 10 ** 7
 ACTORS = 8
 
 LSTM = True
