@@ -71,12 +71,11 @@ class Agent:
 
     # this method is called after act
     def receive_next(self, obs_tp1, reward_tp1, done_tp1, update=False):
-        obs_t = list(map(self.phi, self.obs_t))
         obs_tp1 = list(map(self.phi, obs_tp1))
 
         for i in range(self.nenvs):
             self.rollouts[i].add(
-                state=obs_t[i],
+                state=self.obs_t[i],
                 reward=reward_tp1[i],
                 action=self.action_t[i],
                 value=0.0 if self.done_t[i] else self.value_t[i],
