@@ -45,18 +45,61 @@ class Agent:
         self.initial_state = np.zeros((nenvs, lstm_unit), np.float32)
         self.rnn_state0 = self.initial_state
         self.rnn_state1 = self.initial_state
-        self.last_obs = np.zeros(([nenvs] + state_shape), dtype=np.float32)
-        self.last_action = [0 for _ in range(nenvs)]
-        self.last_value = [0.0 for _ in range(nenvs)]
-        self.last_done = [False for _ in range(nenvs)]
 
         self.rollouts = [Rollout() for _ in range(nenvs)]
         self.t = 0
 
-    def train(self):
-        # get bootstrap values
-        bootstrap_values = self._get_bootstrap_values()
+    def act(self, obs_t, reward_t, done_t, training=True):
+        # change state shape to WHC
+        obs_t = list(map(self.phi, obs_t))
+        # take next action
+        prob, value, rnn_state = self._act(
+            obs_t, self.rnn_state0, self.rnn_state1)
+        action_t = list(map(
+            lambda p: np.random.choice(range(len(self.actions)), p=p), prob))
+        value_t = np.reshape(value, [-1])
 
+        self.t += 1
+        self.rnn_state0_t = self.rnn_state0
+        self.rnn_state1_t = self.rnn_state1
+        self.obs_t = obs_t
+        self.action_t = action_t
+        self.value_t = value_t
+        self.done_t = done_t
+        self.rnn_state0, self.rnn_state1 = rnn_state
+        return list(map(lambda a: self.actions[a], action_t))
+
+    # this method is called after act
+    def receive_next(self, obs_tp1, reward_tp1, done_tp1, update=False):
+        obs_t = list(map(self.phi, self.obs_t))
+        obs_tp1 = list(map(self.phi, obs_tp1))
+
+        for i in range(self.nenvs):
+            self.rollouts[i].add(
+                state=obs_t[i],
+                reward=reward_tp1[i],
+                action=self.action_t[i],
+                value=0.0 if self.done_t[i] else self.value_t[i],
+                terminal=1.0 if done_tp1[i] else 0.0,
+                feature=[self.rnn_state0_t[i], self.rnn_state1_t[i]]
+            )
+
+        if update:
+            # compute bootstrap value
+            _, value, _ = self._act(obs_tp1, self.rnn_state0, self.rnn_state1)
+            value_tp1 = np.reshape(value, [-1])
+            for i, done in enumerate(done_tp1):
+                if done:
+                    value_tp1[i] = 0.0
+            self.train(value_tp1)
+
+        # initialize lstm state
+        for i, done in enumerate(done_tp1):
+            if done:
+                self.rnn_state0[i] = self.initial_state[0]
+                self.rnn_state1[i] = self.initial_state[0]
+
+    def train(self, bootstrap_values):
         # rollout trajectories
         states,\
         actions,\
@@ -95,36 +138,6 @@ class Agent:
             rollout.flush()
         return loss
 
-    def act(self, obs, reward, done, training=True):
-        # change state shape to WHC
-        obs = list(map(self.phi, obs))
-        # take next action
-        prob, value, rnn_state = self._act(
-            obs, self.rnn_state0, self.rnn_state1)
-        action = list(map(
-            lambda p: np.random.choice(range(len(self.actions)), p=p), prob))
-        value = np.reshape(value, [-1])
-
-        if training:
-            if self.last_obs is not None:
-                for i in range(self.nenvs):
-                    self.rollouts[i].add(
-                        state=self.last_obs[i],
-                        reward=reward[i],
-                        action=self.last_action[i],
-                        value=0.0 if self.last_done[i] else self.last_value[i],
-                        terminal=1.0 if done[i] else 0.0,
-                        feature=[self.rnn_state0[i], self.rnn_state1[i]]
-                    )
-
-        self.t += 1
-        self.rnn_state0, self.rnn_state1 = rnn_state
-        self.last_obs = obs
-        self.last_action = action
-        self.last_value = value
-        self.last_done = done
-        return list(map(lambda a: self.actions[a], action))
-
     def _rollout_trajectories(self):
         states = []
         actions = []
@@ -146,17 +159,3 @@ class Agent:
             mask = (np.array(terminals) - 1.0) * -1.0
             masks.append(mask.tolist())
         return states, actions, rewards, values, features0, features1, masks
-
-    def _get_bootstrap_values(self):
-        values = []
-        for done, value in zip(self.last_done, self.last_value):
-            values.append(0.0 if done else value)
-        return values
-
-    def reset(self, index, obs):
-        self.rnn_state0[index] = self.initial_state[0]
-        self.rnn_state1[index] = self.initial_state[0]
-        self.last_obs[index] = self.phi(obs)
-        self.last_action[index] = 0
-        self.last_value[index] = 0
-        self.last_done[index] = False
