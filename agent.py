@@ -13,7 +13,6 @@ class Agent:
                  gamma=0.99,
                  lstm_unit=256,
                  time_horizon=5,
-                 policy_factor=1.0,
                  value_factor=0.5,
                  entropy_factor=0.01,
                  grad_clip=40.0,
@@ -36,7 +35,6 @@ class Agent:
             lstm_unit=lstm_unit,
             state_shape=state_shape,
             grad_clip=grad_clip,
-            policy_factor=policy_factor,
             value_factor=value_factor,
             entropy_factor=entropy_factor,
             scope=name

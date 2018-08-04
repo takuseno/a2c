@@ -10,7 +10,6 @@ def build_train(model,
                 state_shape=[84, 84, 1],
                 grad_clip=40.0,
                 value_factor=0.5,
-                policy_factor=1.0,
                 entropy_factor=0.01,
                 scope='a2c',
                 reuse=None):
@@ -51,9 +50,7 @@ def build_train(model,
                 tf.reduce_sum(policy * log_policy, axis=1) * masks)
         with tf.variable_scope('policy_loss'):
             policy_loss = tf.reduce_sum(log_prob * advantages * masks)
-        loss = value_factor * value_loss\
-            - policy_factor * policy_loss\
-            - entropy_factor * entropy
+        loss = value_factor * value_loss - policy_loss - entropy_factor * entropy
 
         # network weights
         network_vars = tf.get_collection(

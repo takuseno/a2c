@@ -80,7 +80,6 @@ def main():
         gamma=constants.GAMMA,
         lstm_unit=constants.LSTM_UNIT,
         time_horizon=constants.TIME_HORIZON,
-        policy_factor=constants.POLICY_FACTOR,
         value_factor=constants.VALUE_FACTOR,
         entropy_factor=constants.ENTROPY_FACTOR,
         grad_clip=constants.GRAD_CLIP,
