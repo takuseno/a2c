@@ -52,7 +52,7 @@ def _make_network(convs,
 
         policy = layers.fully_connected(
             out, num_actions, activation_fn=tf.nn.softmax,
-            weights_initializer=tf.orthogonal_initializer(1.0))
+            weights_initializer=tf.orthogonal_initializer(0.1))
 
         value = layers.fully_connected(
             out, 1, activation_fn=None,
