@@ -23,7 +23,7 @@ from datetime import datetime
 def main():
     date = datetime.now().strftime('%Y%m%d%H%M%S')
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='PongDeterministic-v4')
+    parser.add_argument('--env', type=str, default='PongNoFrameskip-v4')
     parser.add_argument('--load', type=str)
     parser.add_argument('--logdir', type=str, default=date)
     parser.add_argument('--render', action='store_true')
