@@ -44,12 +44,12 @@ def build_train(model,
         target_values = tf.reshape(target_values_ph, [-1, 1])
         masks = tf.reshape(mask_ph, [-1, 1])
         with tf.variable_scope('value_loss'):
-            value_loss = tf.reduce_sum(tf.square(target_values - value) * masks)
+            value_loss = tf.reduce_mean(tf.square(target_values - value) * masks)
         with tf.variable_scope('entropy'):
-            entropy = -tf.reduce_sum(
+            entropy = -tf.reduce_mean(
                 tf.reduce_sum(policy * log_policy, axis=1) * masks)
         with tf.variable_scope('policy_loss'):
-            policy_loss = tf.reduce_sum(log_prob * advantages * masks)
+            policy_loss = tf.reduce_mean(log_prob * advantages * masks)
         loss = value_factor * value_loss - policy_loss - entropy_factor * entropy
 
         # network weights
