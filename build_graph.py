@@ -20,7 +20,7 @@ def build_train(model,
             tf.float32, [nenvs, lstm_unit], name='rnn_state_0')
         rnn_state_ph1 = tf.placeholder(
             tf.float32, [nenvs, lstm_unit], name='rnn_state_1')
-        actions_ph = tf.placeholder(tf.uint8, [None], name='action')
+        actions_ph = tf.placeholder(tf.int32, [None], name='action')
         target_values_ph = tf.placeholder(tf.float32, [None], name='value')
         advantages_ph = tf.placeholder(tf.float32, [None], name='advantage')
         step_size_ph = tf.placeholder(tf.int32, [], name='step_size')
@@ -46,23 +46,27 @@ def build_train(model,
         with tf.variable_scope('value_loss'):
             value_loss = tf.reduce_mean(tf.square(target_values - value) * masks)
         with tf.variable_scope('entropy'):
-            entropy = -tf.reduce_mean(
-                tf.reduce_sum(policy * log_policy, axis=1) * masks)
+            #entropy = -tf.reduce_mean(
+            #    tf.reduce_sum(policy * log_policy, axis=1) * masks)
+            entropy = tf.reduce_mean(cat_entropy(policy))
         with tf.variable_scope('policy_loss'):
-            policy_loss = tf.reduce_mean(log_prob * advantages * masks)
-        loss = value_factor * value_loss - policy_loss - entropy_factor * entropy
+            neglog = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=policy, labels=actions_ph)
+            policy_loss = tf.reduce_mean(neglog * advantages * masks)
+        loss = value_factor * value_loss + policy_loss - entropy_factor * entropy
 
         # network weights
         network_vars = tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES, scope)
 
         # gradients
-        gradients, _ = tf.clip_by_global_norm(
-            tf.gradients(loss, network_vars), grad_clip)
+        gradients = tf.gradients(loss, network_vars)
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, grad_clip)
 
-        optimize_expr = optimizer.apply_gradients(zip(gradients, network_vars))
+        optimize_expr = optimizer.apply_gradients(
+            zip(clipped_gradients, network_vars))
 
-        def train(obs, actions, targets, advantages, rnn_state0, rnn_state1, masks, step_size):
+        def train(obs, actions, targets, advantages,
+                  rnn_state0, rnn_state1, masks, step_size):
             feed_dict = {
                 obs_input: obs,
                 actions_ph: actions,
@@ -84,6 +88,13 @@ def build_train(model,
                 step_size_ph: 1
             }
             return tf.get_default_session().run(
-                [policy, value, state_out], feed_dict=feed_dict)
+                [tf.nn.softmax(policy), value, state_out], feed_dict=feed_dict)
 
     return act, train
+
+def cat_entropy(logits):
+    a0 = logits - tf.reduce_max(logits, 1, keep_dims=True)
+    ea0 = tf.exp(a0)
+    z0 = tf.reduce_sum(ea0, 1, keep_dims=True)
+    p0 = ea0 / z0
+    return tf.reduce_sum(p0 * (tf.log(z0) - a0), 1)
