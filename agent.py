@@ -76,7 +76,7 @@ class Agent:
                 state=self.obs_t[i],
                 reward=reward_tp1[i],
                 action=self.action_t[i],
-                value=0.0 if self.done_t[i] else self.value_t[i],
+                value=self.value_t[i],
                 terminal=1.0 if done_tp1[i] else 0.0,
                 feature=[self.rnn_state0_t[i], self.rnn_state1_t[i]]
             )
