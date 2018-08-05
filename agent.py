@@ -152,7 +152,7 @@ class Agent:
             features1.append(rollout.features[0][1])
             # create mask
             terminals = rollout.terminals
-            terminals = [terminals[0]] + terminals[:len(terminals) - 1]
+            terminals = [0.0] + terminals[:len(terminals) - 1]
             mask = (np.array(terminals) - 1.0) * -1.0
             masks.append(mask.tolist())
         return states, actions, rewards, values, features0, features1, masks
