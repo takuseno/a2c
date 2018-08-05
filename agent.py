@@ -123,7 +123,7 @@ class Agent:
         actions = np.reshape(actions, [-1])
         targets = np.reshape(targets, [-1])
         advs = np.reshape(advs, [-1])
-        masks = np.reshape(masks, [-1])
+        masks = np.reshape(masks, [-1]) == 1.0
 
         # train network
         loss = self._train(

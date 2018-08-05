@@ -24,7 +24,7 @@ def build_train(model,
         target_values_ph = tf.placeholder(tf.float32, [None], name='value')
         advantages_ph = tf.placeholder(tf.float32, [None], name='advantage')
         step_size_ph = tf.placeholder(tf.int32, [], name='step_size')
-        mask_ph = tf.placeholder(tf.float32, [None], name='mask')
+        mask_ph = tf.placeholder(tf.bool, [None], name='mask')
 
         # rnn state in tuple
         rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(
@@ -42,14 +42,17 @@ def build_train(model,
         # loss
         advantages = tf.reshape(advantages_ph, [-1, 1])
         target_values = tf.reshape(target_values_ph, [-1, 1])
-        masks = tf.reshape(mask_ph, [-1, 1])
         with tf.variable_scope('value_loss'):
-            value_loss = tf.reduce_mean(tf.square(target_values - value) * masks)
+            masked_value_loss = tf.boolean_mask(
+                tf.square(target_values - value), mask_ph)
+            value_loss = tf.reduce_mean(masked_value_loss)
         with tf.variable_scope('entropy'):
-            entropy = -tf.reduce_mean(
-                tf.reduce_sum(policy * log_policy, axis=1) * masks)
+            masked_entroypy = tf.boolean_mask(
+                tf.reduce_sum(policy * log_policy, axis=1), mask_ph)
+            entropy = -tf.reduce_mean(masked_entroypy)
         with tf.variable_scope('policy_loss'):
-            policy_loss = tf.reduce_mean(log_prob * advantages * masks)
+            masked_policy_loss = tf.boolean_mask(log_prob * advantages, mask_ph)
+            policy_loss = tf.reduce_mean(masked_policy_loss)
         loss = value_factor * value_loss - policy_loss - entropy_factor * entropy
 
         # network weights
