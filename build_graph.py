@@ -56,16 +56,17 @@ def build_train(model,
         loss = value_factor * value_loss - policy_loss - entropy_factor * entropy
 
         # network weights
-        network_vars = tf.get_collection(
-            tf.GraphKeys.TRAINABLE_VARIABLES, scope)
+        network_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
 
         # gradients
-        gradients, _ = tf.clip_by_global_norm(
-            tf.gradients(loss, network_vars), grad_clip)
+        gradients = tf.gradients(loss, network_vars)
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, grad_clip)
+        # update
+        grads_and_vars = zip(clipped_gradients, network_vars)
+        optimize_expr = optimizer.apply_gradients(grads_and_vars)
 
-        optimize_expr = optimizer.apply_gradients(zip(gradients, network_vars))
-
-        def train(obs, actions, targets, advantages, rnn_state0, rnn_state1, masks, step_size):
+        def train(obs, actions, targets, advantages,
+                  rnn_state0, rnn_state1, masks, step_size):
             feed_dict = {
                 obs_input: obs,
                 actions_ph: actions,
@@ -76,8 +77,8 @@ def build_train(model,
                 mask_ph: masks,
                 step_size_ph: step_size
             }
-            loss_val, _ = tf.get_default_session().run([loss, optimize_expr], feed_dict=feed_dict)
-            return loss_val
+            sess = tf.get_default_session()
+            return sess.run([loss, optimize_expr], feed_dict=feed_dict)[0]
 
         def act(obs, rnn_state0, rnn_state1):
             feed_dict = {
@@ -86,7 +87,7 @@ def build_train(model,
                 rnn_state_ph1: rnn_state1,
                 step_size_ph: 1
             }
-            return tf.get_default_session().run(
-                [policy, value, state_out], feed_dict=feed_dict)
+            sess = tf.get_default_session()
+            return sess.run([policy, value, state_out], feed_dict=feed_dict)
 
     return act, train
