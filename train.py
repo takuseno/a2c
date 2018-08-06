@@ -95,7 +95,7 @@ def main():
     envs = []
     for i in range(constants.ACTORS):
         env = gym.make(args.env)
-        env.seed(i)
+        env.seed(constants.RANDOM_SEED)
         if is_atari:
             env = NoopResetEnv(env, noop_max=30)
             env = MaxAndSkipEnv(env)
