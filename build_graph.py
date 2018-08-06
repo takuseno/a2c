@@ -37,7 +37,7 @@ def build_train(model,
 
         actions_one_hot = tf.one_hot(actions_ph, num_actions, dtype=tf.float32)
         log_policy = tf.log(tf.clip_by_value(policy, 1e-20, 1.0))
-        log_prob = tf.reduce_sum(log_policy * actions_one_hot, [1])
+        log_prob = tf.reduce_sum(log_policy * actions_one_hot, axis=1, keep_dims=True)
 
         # loss
         advantages = tf.reshape(advantages_ph, [-1, 1])
