@@ -65,7 +65,7 @@ def main():
 
     model = make_network(
         constants.CONVS, constants.FCS,
-        lstm=constants.LSTM, padding=constants.PADDING)
+        use_lstm=constants.LSTM, padding=constants.PADDING)
 
     lr = tf.Variable(constants.LR)
     decayed_lr = tf.placeholder(tf.float32)
