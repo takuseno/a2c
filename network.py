@@ -41,10 +41,11 @@ def _make_network(convs,
         with tf.variable_scope('rnn'):
             rnn_in = batch_to_seq(out, nenvs, step_size)
             masks = batch_to_seq(masks, nenvs, step_size)
-            rnn_out, rnn_state = lstm(rnn_in, masks, rnn_state, lstm_unit, np.sqrt(2.0))
+            rnn_out, rnn_state = lstm(
+                rnn_in, masks, rnn_state, lstm_unit, np.sqrt(2.0))
             rnn_out = seq_to_batch(rnn_out, nenvs, step_size)
 
-        if lstm:
+        if use_lstm:
             out = rnn_out
 
         policy = layers.fully_connected(
