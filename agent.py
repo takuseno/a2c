@@ -1,8 +1,9 @@
 import numpy as np
 import tensorflow as tf
 
-from rlsaber.util import Rollout, compute_returns, compute_gae
+from rlsaber.util import compute_returns, compute_gae
 from build_graph import build_train
+from rollout import Rollout
 
 
 class Agent:
@@ -45,78 +46,82 @@ class Agent:
         self.initial_state = np.zeros((nenvs, lstm_unit*2), np.float32)
         self.rnn_state = self.initial_state
 
+        self.state_tm1 = dict(
+            obs=None, action=None, value=None, done=None, rnn_state=None)
         self.rollouts = [Rollout() for _ in range(nenvs)]
         self.t = 0
 
     def act(self, obs_t, reward_t, done_t, training=True):
         # change state shape to WHC
         obs_t = list(map(self.phi, obs_t))
+
+        # initialize lstm state
+        for i, done in enumerate(done_t):
+            if done:
+                self.rnn_state[i] = self.initial_state[0]
+
         # take next action
-        prob, value, rnn_state = self._act(obs_t, self.rnn_state)
+        prob, value, rnn_state_t = self._act(obs_t, self.rnn_state)
         action_t = list(map(
             lambda p: np.random.choice(range(len(self.actions)), p=p), prob))
         value_t = np.reshape(value, [-1])
 
-        self.t += 1
-        self.rnn_state_t = self.rnn_state
-        self.obs_t = obs_t
-        self.action_t = action_t
-        self.value_t = value_t
-        self.done_t = done_t
-        self.rnn_state = rnn_state
-        return list(map(lambda a: self.actions[a], action_t))
+        if self.state_tm1['obs'] is not None:
+            for i in range(self.nenvs):
+                self.rollouts[i].add(
+                    obs_t=self.state_tm1['obs'][i],
+                    reward_tp1=reward_t[i],
+                    action_t=self.state_tm1['action'][i],
+                    value_t=self.state_tm1['value'][i],
+                    terminal_tp1=1.0 if done_t[i] else 0.0,
+                    feature_t=self.state_tm1['rnn_state'][i]
+                )
 
-    # this method is called after act
-    def receive_next(self, obs_tp1, reward_tp1, done_tp1, update=False):
-        obs_tp1 = list(map(self.phi, obs_tp1))
-
-        for i in range(self.nenvs):
-            self.rollouts[i].add(
-                state=self.obs_t[i],
-                reward=reward_tp1[i],
-                action=self.action_t[i],
-                value=self.value_t[i],
-                terminal=1.0 if done_tp1[i] else 0.0,
-                feature=self.rnn_state_t[i]
-            )
-
-        if update:
+        if self.t > 0 and (self.t / self.nenvs) % self.time_horizon == 0:
             # compute bootstrap value
-            _, value, _ = self._act(obs_tp1, self.rnn_state)
-            value_tp1 = np.reshape(value, [-1])
-            for i, done in enumerate(done_tp1):
+            bootstrap_values = value_t.copy()
+            for i, done in enumerate(self.state_tm1['done']):
                 if done:
-                    value_tp1[i] = 0.0
-            self.train(value_tp1)
+                    bootstrap_values[i] = 0.0
+            self.train(bootstrap_values)
 
-        # initialize lstm state
-        for i, done in enumerate(done_tp1):
-            if done:
-                self.rnn_state[i] = self.initial_state[0]
+        self.t += self.nenvs
+
+        self.rnn_state = rnn_state_t
+        self.state_tm1['obs'] = obs_t
+        self.state_tm1['action'] = action_t
+        self.state_tm1['value'] = value_t
+        self.state_tm1['done'] = done_t
+        self.state_tm1['rnn_state'] = rnn_state_t
+
+        return list(map(lambda a: self.actions[a], action_t))
 
     def train(self, bootstrap_values):
         # rollout trajectories
-        states,\
-        actions,\
-        rewards,\
-        values,\
-        features,\
-        terminals,\
-        masks = self._rollout_trajectories()
+        obs_t,\
+        actions_t,\
+        rewards_tp1,\
+        values_t,\
+        features_t,\
+        terminals_tp1,\
+        masks_t = self._rollout_trajectories()
 
         # compute advantages
-        returns = compute_returns(rewards, bootstrap_values, terminals, self.gamma)
-        advs = compute_gae(rewards, values, bootstrap_values, terminals, self.gamma, 1.0)
+        returns_t = compute_returns(rewards_tp1, bootstrap_values,
+                                    terminals_tp1, self.gamma)
+        advs_t = compute_gae(rewards_tp1, values_t, bootstrap_values,
+                             terminals_tp1, self.gamma, 1.0)
 
         # flatten inputs
-        states = np.reshape(states, [-1] + self.state_shape)
-        actions = np.reshape(actions, [-1])
-        returns = np.reshape(returns, [-1])
-        advs = np.reshape(advs, [-1])
-        masks = np.reshape(masks, [-1])
+        obs_t = np.reshape(obs_t, [-1] + self.state_shape)
+        actions_t = np.reshape(actions_t, [-1])
+        returns_t = np.reshape(returns_t, [-1])
+        advs_t = np.reshape(advs_t, [-1])
+        masks_t = np.reshape(masks_t, [-1])
 
         # train network
-        loss = self._train(states, actions, returns, advs, features, masks)
+        loss = self._train(
+            obs_t, actions_t, returns_t, advs_t, features_t, masks_t)
 
         # clean trajectories
         for rollout in self.rollouts:
@@ -124,21 +129,21 @@ class Agent:
         return loss
 
     def _rollout_trajectories(self):
-        states = []
-        actions = []
-        rewards = []
-        values = []
-        features = []
-        terminals = []
-        masks = []
+        obs_t = []
+        actions_t = []
+        rewards_tp1 = []
+        values_t = []
+        features_t = []
+        terminals_tp1 = []
+        masks_t = []
         for rollout in self.rollouts:
-            states.append(rollout.states)
-            actions.append(rollout.actions)
-            rewards.append(rollout.rewards)
-            values.append(rollout.values)
-            terminals.append(rollout.terminals)
-            features.append(rollout.features[0])
+            obs_t.append(rollout.obs_t)
+            actions_t.append(rollout.actions_t)
+            rewards_tp1.append(rollout.rewards_tp1)
+            values_t.append(rollout.values_t)
+            terminals_tp1.append(rollout.terminals_tp1)
+            features_t.append(rollout.features_t[0])
             # create mask
-            mask = [0.0] + rollout.terminals[:len(rollout.terminals) - 1]
-            masks.append(mask)
-        return states, actions, rewards, values, features, terminals, masks
+            mask = [0.0] + rollout.terminals_tp1[:self.time_horizon - 1]
+            masks_t.append(mask)
+        return obs_t, actions_t, rewards_tp1, values_t, features_t, terminals_tp1, masks_t
